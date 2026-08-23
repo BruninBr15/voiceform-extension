@@ -1,0 +1,22 @@
+#vf-overlay {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2147483647;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  color: white;
+  padding: 14px 18px;
+  border-radius: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  box-shadow: 0 12px 40px rgba(67, 56, 202, 0.45);
+  max-width: 320px;
+  line-height: 1.4;
+}
+#vf-overlay .vf-title { font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+#vf-overlay .vf-status { opacity: 0.9; font-size: 12px; }
+.vf-highlight {
+  outline: 3px solid #06b6d4 !important;
+  outline-offset: 2px !important;
+  transition: outline 0.2s ease !important;
+}
