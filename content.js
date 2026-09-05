@@ -1,6 +1,6 @@
 // Script de conteúdo VoiceForm
 // Detecta inputs de formulário, os lê via síntese de fala, preenche via reconhecimento de fala.
-// Limpeza de PLN usa `compromise` (carregado como compromise.min.js).
+// A normalização usa `compromise` quando ele estiver disponível na página.
 
 (() => {
   const state = {
