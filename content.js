@@ -38,14 +38,20 @@
 
   // ---------- Descoberta de campos ----------
   function discoverFields() {
-    const selector = 'input:not([type=hidden]):not([type=submit]):not([type=button]), textarea, select';
-    const nodes = Array.from(document.querySelectorAll(selector)).filter((el) => {
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 && !el.disabled && !el.readOnly;
-    });
-    return nodes.map((el) => ({ el, label: getLabel(el), type: inferType(el) }));
-  }
+  const writableTypes = [
+    "text", "email", "tel", "number", "password",
+    "url", "search"
+  ];
+  const inputSelector = writableTypes.map(t => `input[type=${t}]`).join(", ");
+  // input without a "type" attribute defaults to text, so we include it too
+  const selector = `${inputSelector}, input:not([type]), textarea , select`;
 
+  const nodes = Array.from(document.querySelectorAll(selector)).filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && !el.disabled && !el.readOnly;
+  });
+  return nodes.map((el) => ({ el, label: getLabel(el), type: inferType(el) }));
+}
   function getLabel(el) {
     if (el.labels && el.labels.length) return el.labels[0].innerText.trim();
     if (el.getAttribute("aria-label")) return el.getAttribute("aria-label");
@@ -83,7 +89,7 @@
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return null;
     const r = new SR();
-    r.lang = navigator.language || "en-US";
+    r.lang = navigator.language || "en-US"; "pt-BR";
     r.continuous = false;
     r.interimResults = false;
     return r;
