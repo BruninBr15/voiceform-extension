@@ -43,6 +43,7 @@
     "url", "search"
   ];
   const inputSelector = writableTypes.map(t => `input[type=${t}]`).join(", ");
+  // input without a "type" attribute defaults to text, so we include it too
   const selector = `${inputSelector}, input:not([type]), textarea , select`;
 
   const nodes = Array.from(document.querySelectorAll(selector)).filter((el) => {
@@ -97,7 +98,7 @@
   function listen() {
     return new Promise((resolve, reject) => {
       const r = getRecognition();
-      if (!r) return reject(new Error("SpeechRecognition não é suportado nesse navegador."));
+      if (!r) return reject(new Error("SpeechRecognition not supported in this browser."));
       state.recognition = r;
       r.onresult = (e) => resolve(e.results[0][0].transcript);
       r.onerror = (e) => reject(e.error);
@@ -105,62 +106,48 @@
       r.start();
     });
   }
-
-  // ---------- Normalização de PLN (compromise) ----------
-  const EMAIL_SYMBOLS_PT = {
-  "arroba": "@",
-  "at": "@",              // mantém compatibilidade com inglês
+  // ---------- DICIONARIO DE PONTUAÇÕES ----------
+  const KEY_WORDS={
+     "arroba": "@",
+  "ponto de exclamação": "!",
+  "exclamação": "!",
+  "ponto de interrogação": "?",
+  "interrogação": "?",
+  "vírgula": ",",
   "ponto": ".",
-  "dot": ".",              // mantém compatibilidade com inglês
-  "traço": "-",
-  "traco": "-",
-  "hífen": "-",
-  "hifen": "-",
-  "underline": "_",
-  "underscore": "_",
-  "sublinhado": "_",
-  "barra": "/",
-  "meia arroba": "@",       // variações que o STT pode gerar
-};
+  };
 
-function normalizeEmail(value) {
-  let result = value.toLowerCase();
-
-  // Ordena as chaves da mais longa para a mais curta,
-  // assim "meia arroba" é testado antes de "arroba" sozinho
-  const keys = Object.keys(EMAIL_SYMBOLS_PT).sort((a, b) => b.length - a.length);
-
-  for (const word of keys) {
-    const symbol = EMAIL_SYMBOLS_PT[word];
-    const pattern = new RegExp(`\\s+${word}\\s+`, "g");
-    result = result.replace(pattern, symbol);
+  function replaceKeyWords(text) {
+    let result =text;
+    for (const[word, symbol] of Object.entries(KEY_WORDS)){
+      const regex = RegExp(`\\b${word}\\b`, "gi");
+      result = result.replace(regex,symbol);
+    }
+    return result;
   }
+  // ---------- Normalização de PLN (compromise) /   ----------
+  function normalize(transcript, type) {
+    const nlp = window.nlp;
+    let value = transcript.trim();
+    value = replaceKeyWords(value);
+    if (!nlp) return value;
+    const doc = nlp(value);
 
-  // remove espaços restantes (nomes falados separados por espaço)
-  result = result.replace(/\s+/g, "");
-
-  return result;
-}
-
-function normalize(transcript, type) {
-  const nlp = window.nlp;
-  let value = transcript.trim();
-  if (!nlp) return value;
-  const doc = nlp(value);
-
-  if (type === "email") {
-    value = normalizeEmail(value);
-  } else if (type === "tel" || type === "number") {
-    const nums = doc.numbers().toNumber().out("array");
-    value = nums.length ? nums.join("") : value.replace(/[^\d+]/g, "");
-  } else if (type === "date") {
-    const d = doc.dates().out("array")[0];
-    if (d) value = d;
-  } else {
-    value = doc.sentences().toTitleCase ? doc.sentences().toTitleCase().out("text") : value;
+    if (type === "email") {
+      // "john at gmail dot com" → "john@gmail.com"
+      value = value.toLowerCase().replace(/\s+at\s+/g, "@").replace(/\s+dot\s+/g, ".").replace(/\s+/g, "");
+    } else if (type === "tel" || type === "number") {
+      const nums = doc.numbers().toNumber().out("array");
+      value = nums.length ? nums.join("") : value.replace(/[^\d+]/g, "");
+    } else if (type === "date") {
+      const d = doc.dates().out("array")[0];
+      if (d) value = d;
+    } else {
+      // Capitalize sentences for free text
+      value = doc.sentences().toTitleCase ? doc.sentences().toTitleCase().out("text") : value;
+    }
+    return value;
   }
-  return value;
-}
 
   // ---------- Preenchimento ----------
   function setValue(el, value) {
