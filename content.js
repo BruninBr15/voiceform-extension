@@ -37,22 +37,7 @@
   }
 
   // ---------- Descoberta de campos ----------
-  function discoverFields() {
-  const writableTypes = [
-    "text", "email", "tel", "number", "password",
-    "url", "search"
-  ];
-  const inputSelector = writableTypes.map(t => `input[type=${t}]`).join(", ");
-  // input without a "type" attribute defaults to text, so we include it too
-  const selector = `${inputSelector}, input:not([type]), textarea , select`;
-
-  const nodes = Array.from(document.querySelectorAll(selector)).filter((el) => {
-    const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 && !el.disabled && !el.readOnly;
-  });
-  return nodes.map((el) => ({ el, label: getLabel(el), type: inferType(el) }));
-}
-  function getLabel(el) {
+function getLabel(el) {
     if (el.labels && el.labels.length) return el.labels[0].innerText.trim();
     if (el.getAttribute("aria-label")) return el.getAttribute("aria-label");
     if (el.placeholder) return el.placeholder;
@@ -65,8 +50,33 @@
     if (["email", "tel", "number", "date", "url", "password"].includes(t)) return t;
     if (el.tagName === "SELECT") return "select";
     if (el.tagName === "TEXTAREA") return "textarea";
+
+    // >>> ALTERADO: fallback quando o atributo `type` não é confiável <<<
+    // Alguns formulários usam type="text" com máscara/validação própria,
+    // então tentamos inferir pelo name/id/autocomplete/placeholder também.
+    const hint = `${el.name || ""} ${el.id || ""} ${el.autocomplete || ""} ${el.placeholder || ""}`.toLowerCase();
+    if (/e-?mail/.test(hint)) return "email";
+    if (/senha|password|\bpass\b/.test(hint)) return "password";
+    // <<< FIM DA ALTERAÇÃO >>>
+
     return "text";
   }
+
+  function discoverFields() {
+    const writableTypes = [
+      "text", "email", "tel", "number", "password",
+      "url", "search"
+    ];
+    const inputSelector = writableTypes.map(t => `input[type=${t}]`).join(", ");
+    // input without a "type" attribute defaults to text, so we include it too
+    const selector = `${inputSelector}, input:not([type]), textarea , select`;
+
+    const nodes = Array.from(document.querySelectorAll(selector)).filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && !el.disabled && !el.readOnly;
+    });
+    return nodes.map((el) => ({ el, label: getLabel(el), type: inferType(el) }));
+}
 
   // ---------- Síntese de fala ----------
   function speak(text) {
@@ -108,7 +118,7 @@
   }
   // ---------- DICIONARIO DE PONTUAÇÕES ----------
   const KEY_WORDS={
-     "arroba": "@",
+  "arroba": "@",
   "ponto de exclamação": "!",
   "exclamação": "!",
   "ponto de interrogação": "?",
@@ -127,16 +137,24 @@
   }
   // ---------- Normalização de PLN (compromise) /   ----------
   function normalize(transcript, type) {
-    const nlp = window.nlp;
     let value = transcript.trim();
     value = replaceKeyWords(value);
+
+    // Email e senha precisam ficar sem espaços, com ou sem `compromise` disponível
+    if (type === "email") {
+      // "john at gmail dot com" → "john@gmail.com"
+      return value.toLowerCase().replace(/\s+at\s+/g, "@").replace(/\s+dot\s+/g, ".").replace(/\s+/g, "");
+    }
+    if (type === "password") {
+      // junta tudo o que foi dito (voz costuma separar letras/palavras com espaços)
+      return value.replace(/\s+/g, "");
+    }
+
+    const nlp = window.nlp;
     if (!nlp) return value;
     const doc = nlp(value);
 
-    if (type === "email") {
-      // "john at gmail dot com" → "john@gmail.com"
-      value = value.toLowerCase().replace(/\s+at\s+/g, "@").replace(/\s+dot\s+/g, ".").replace(/\s+/g, "");
-    } else if (type === "tel" || type === "number") {
+    if (type === "tel" || type === "number") {
       const nums = doc.numbers().toNumber().out("array");
       value = nums.length ? nums.join("") : value.replace(/[^\d+]/g, "");
     } else if (type === "date") {
