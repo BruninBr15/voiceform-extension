@@ -249,6 +249,30 @@ function getLabel(el) {
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
+  // ---------- Resumo da sessão ----------
+  function describeField(f, n) {
+    if (f.skipped || f.value === undefined) {
+      return `Campo ${n}, ${f.label}: não preenchido.`;
+    }
+    // Senha nunca é lida em voz alta
+    if (f.type === "password") {
+      return `Campo ${n}, ${f.label}: preenchido. Por segurança, não será lido em voz alta.`;
+    }
+    let spoken = f.value;
+    if (f.type === "email") {
+      spoken = spoken.replace(/@/g, " arroba ").replace(/\./g, " ponto ");
+    }
+    return `Campo ${n}, ${f.label}: ${spoken}.`;
+  }
+
+  async function speakSummary() {
+    setStatus("Resumo da sessão…");
+    await speak("Resumo do preenchimento.");
+    for (let i = 0; i < state.fields.length && state.active; i++) {
+      await speak(describeField(state.fields[i], i + 1));
+    }
+  }
+
   // ---------- Loop principal ----------
   async function runSession() {
     const fields = discoverFields();
@@ -275,8 +299,10 @@ function getLabel(el) {
         const transcript = await listen();
         const value = normalize(transcript, f.type);
         setValue(f.el, value);
+        f.value = value;
         setStatus(`Preenchido "${f.label}" com: ${value}`);
       } catch (err) {
+        f.skipped = true;
         setStatus(`Pulado "${f.label}" (${err.message || err})`);
         await speak(`Pulando ${f.label}.`);
       } finally {
@@ -284,6 +310,7 @@ function getLabel(el) {
       }
     }
     setStatus("Sessão concluída.");
+    if (state.active) await speakSummary();
     await speak("Tudo pronto.");
     state.active = false;
   }
