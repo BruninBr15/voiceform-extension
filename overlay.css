@@ -20,3 +20,27 @@
   outline-offset: 2px !important;
   transition: outline 0.2s ease !important;
 }
+
+/*Numeracao dos campos selecionados*/
+#vf-badge-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483646;
+}
+
+.vf-badge {
+  position: fixed;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  color: #fff;
+  font: 700 12px/20px Arial, sans-serif;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  user-select: none;
+}

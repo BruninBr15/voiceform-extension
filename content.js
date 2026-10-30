@@ -9,6 +9,10 @@
     active: false,
     recognition: null,
     overlay: null,
+    badgeLayer: null,
+    badges: [],
+    badgeListenersAttached: false,
+    badgeRaf: null,
   };
 
   // ---------- Sobreposição UI ----------
@@ -78,6 +82,73 @@ function getLabel(el) {
     return nodes.map((el) => ({ el, label: getLabel(el), type: inferType(el) }));
 }
 
+  // ---------- Numeração dos campos (badges) ----------
+  const BADGE_SIZE = 24;
+
+  function ensureBadgeLayer() {
+    if (state.badgeLayer) return state.badgeLayer;
+    const layer = document.createElement("div");
+    layer.id = "vf-badge-layer";
+    document.body.appendChild(layer);
+    state.badgeLayer = layer;
+    return layer;
+  }
+ 
+  function positionBadges() {
+    state.fields.forEach((f, i) => {
+      const b = state.badges[i];
+      if (!b) return;
+      const r = f.el.getBoundingClientRect();
+      const visible = r.width > 0 && r.height > 0;
+      b.style.display = visible ? "block" : "none";
+      if (!visible) return;
+ 
+      // À esquerda do campo; se não houver espaço, fica dentro do campo.
+      let left = r.left - BADGE_SIZE - 6;
+      if (left < 2) left = r.left + 4;
+ 
+      // Centralizado verticalmente (em textarea grande, fica perto do topo).
+      const offset = Math.min(r.height / 2, 20);
+      b.style.left = `${left}px`;
+      b.style.top = `${r.top + offset - BADGE_SIZE / 2}px`;
+    });
+  }
+ 
+  function schedulePositionBadges() {
+    if (state.badgeRaf) return;
+    state.badgeRaf = requestAnimationFrame(() => {
+      state.badgeRaf = null;
+      positionBadges();
+    });
+  }
+ 
+  function renderBadges(fields) {
+    clearBadges();
+    const layer = ensureBadgeLayer();
+    state.fields = fields;
+    state.badges = fields.map((_, i) => {
+      const b = document.createElement("div");
+      b.className = "vf-badge";
+      b.textContent = String(i + 1);
+      layer.appendChild(b);
+      return b;
+    });
+ 
+    if (!state.badgeListenersAttached) {
+      window.addEventListener("scroll", schedulePositionBadges, true);
+      window.addEventListener("resize", schedulePositionBadges);
+      state.badgeListenersAttached = true;
+    }
+    positionBadges();
+  }
+ 
+  function clearBadges() {
+    state.badges.forEach((b) => b.remove());
+    state.badges = [];
+  }
+
+ 
+
   // ---------- Síntese de fala ----------
   function speak(text) {
     return new Promise((resolve) => {
@@ -99,7 +170,7 @@ function getLabel(el) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return null;
     const r = new SR();
-    r.lang = navigator.language || "en-US"; "pt-BR";
+    r.lang = "pt-BR";
     r.continuous = false;
     r.interimResults = false;
     return r;
@@ -180,7 +251,9 @@ function getLabel(el) {
 
   // ---------- Loop principal ----------
   async function runSession() {
-    state.fields = discoverFields();
+    const fields = discoverFields();
+    renderBadges(fields); // mostra os números e guarda em state.fields
+
     if (!state.fields.length) {
       setStatus("Nenhum campo de formulário encontrado nesta página.");
       await speak("Nenhum campo de formulário encontrado nesta página.");
@@ -192,10 +265,11 @@ function getLabel(el) {
     state.active = true;
     for (state.index = 0; state.index < state.fields.length && state.active; state.index++) {
       const f = state.fields[state.index];
+      const n = state.index + 1;
       f.el.classList.add("vf-highlight");
       f.el.scrollIntoView({ behavior: "smooth", block: "center" });
-      setStatus(`Campo ${state.index + 1}/${state.fields.length}: ${f.label}`);
-      await speak(`${f.label}. Por favor, responda.`);
+      setStatus(`Campo ${n}/${state.fields.length}: ${f.label}`);
+      await speak(`Campo ${n}, ${f.label}. Por favor, responda.`);
 
       try {
         const transcript = await listen();
@@ -218,6 +292,7 @@ function getLabel(el) {
     state.active = false;
     try { state.recognition?.stop(); } catch {}
     try { speechSynthesis.cancel(); } catch {}
+    clearBadges();
     setStatus("Parado.");
   }
 
@@ -225,6 +300,7 @@ function getLabel(el) {
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "VF_SCAN") {
       const fields = discoverFields();
+      renderBadges(fields);
       ensureOverlay();
       setStatus(`${fields.length} campo(s) detectado(s).`);
     } else if (msg.type === "VF_START" || msg.type === "VF_TOGGLE") {
